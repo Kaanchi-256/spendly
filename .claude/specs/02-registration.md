@@ -1,13 +1,7 @@
 # Spec: Registration
 
 ## Overview
-This feature makes the `/register` page functional. Currently `GET /register` renders
-`register.html` but the form `POST` has no handler. Step 2 adds the `POST /register` logic:
-validate the submitted name, email, and password; hash the password with werkzeug; insert a
-new row into the `users` table (created in Step 1); and handle the duplicate-email case
-gracefully. On success the user is redirected to the login page. This is the first
-write-path feature in Spendly and the entry point to the auth flow that Steps 3–4 (login,
-logout, profile) build on.
+This feature makes the `/register` page functional. Currently `GET /register` renders `register.html` but the form `POST` has no handler. Step 2 adds the `POST /register` logic: validate the submitted name, email, and password; hash the password with werkzeug; insert a new row into the `users` table (created in Step 1); and handle the duplicate-email case gracefully. On success the user is shown success message and redirected to the login page. This is the first write-path feature in Spendly and the entry point to the auth flow that Steps 3–4 (login, logout, profile) build on.
 
 ## Depends on
 - Step 1 — Database setup (`users` table, `get_db()`, `init_db()`, `seed_db()`) must be
