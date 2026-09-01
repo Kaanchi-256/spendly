@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}Your profile — Spendly{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/profile.css') }}">
+{% endblock %}
+
+{% block content %}
+
+<section class="profile-page">
+
+    <header class="profile-head">
+        <h1 class="profile-title">Your profile</h1>
+        <p class="profile-subtitle">Your account details and a snapshot of your spending.</p>
+    </header>
+
+    <div class="profile-card">
+        <div class="profile-card-head">Account</div>
+
+        <div class="profile-field">
+            <span class="profile-field-label">Name</span>
+            <span class="profile-field-value">
+                <span class="profile-avatar">{{ user['name'][0]|upper }}</span>
+                {{ user['name'] }}
+            </span>
+        </div>
+        <div class="profile-field">
+            <span class="profile-field-label">Email</span>
+            <span class="profile-field-value">{{ user['email'] }}</span>
+        </div>
+        <div class="profile-field">
+            <span class="profile-field-label">Member since</span>
+            <span class="profile-field-value">Joined {{ joined }}</span>
+        </div>
+    </div>
+
+    <div class="profile-card">
+        <div class="profile-card-head">Spending summary</div>
+
+        <div class="profile-stats">
+            <div class="profile-stat">
+                <span class="profile-stat-label">Expenses logged</span>
+                <span class="profile-stat-value">{{ expense_count }}</span>
+            </div>
+            <div class="profile-stat">
+                <span class="profile-stat-label">Total spent</span>
+                <span class="profile-stat-value">{{ total_spent|inr }}</span>
+            </div>
+        </div>
+
+        {% if categories %}
+        <div class="profile-cats">
+            {% for c in categories %}
+            <div class="cat-row">
+                <span class="cat-name">{{ c.category }}</span>
+                <div class="cat-track">
+                    <div class="cat-fill cat-fill--{{ loop.index0 % 4 }}" style="width: {{ c.pct }}%"></div>
+                </div>
+                <span class="cat-amt">{{ c.total|inr }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="profile-empty">
+            <p>No expenses logged yet.</p>
+            <a href="{{ url_for('add_expense') }}">Add your first expense</a>
+        </div>
+        {% endif %}
+    </div>
+
+</section>
+
+{% endblock %}
