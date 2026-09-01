@@ -1,8 +1,10 @@
 import os
 import sqlite3
+from datetime import datetime
+from functools import wraps
 
-from flask import Flask, flash, redirect, render_template, request, url_for
-from werkzeug.security import generate_password_hash
+from flask import Flask, flash, redirect, render_template, request, session, url_for
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from database.db import get_db, init_db, seed_db
 
@@ -13,6 +15,54 @@ app.secret_key = os.environ.get("SECRET_KEY", "dev-insecure-secret-change-me")
 with app.app_context():
     init_db()
     seed_db()
+
+
+# ------------------------------------------------------------------ #
+# Auth helpers                                                        #
+# ------------------------------------------------------------------ #
+
+def current_user():
+    """Return the logged-in user row (or None) based on the session."""
+    user_id = session.get("user_id")
+    if user_id is None:
+        return None
+    conn = get_db()
+    try:
+        return conn.execute(
+            "SELECT id, name, email, created_at FROM users WHERE id = ?", (user_id,)
+        ).fetchone()
+    finally:
+        conn.close()
+
+
+@app.context_processor
+def inject_current_user():
+    return {"current_user": current_user()}
+
+
+def login_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if session.get("user_id") is None:
+            return redirect(url_for("login"))
+        return view(*args, **kwargs)
+
+    return wrapped
+
+
+@app.template_filter("inr")
+def inr(value):
+    """Format a number as an INR amount, e.g. 6120.5 -> '₹6,120.50'."""
+    return f"₹{value or 0:,.2f}"
+
+
+def _format_join_date(value):
+    """Turn a stored 'YYYY-MM-DD HH:MM:SS' string into '1 September 2026'."""
+    try:
+        parsed = datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+    except (TypeError, ValueError):
+        return value
+    return f"{parsed.day} {parsed.strftime('%B %Y')}"
 
 
 # ------------------------------------------------------------------ #
@@ -81,9 +131,79 @@ def register():
     return redirect(url_for("login"))
 
 
-@app.route("/login")
+@app.route("/login", methods=["GET", "POST"])
 def login():
-    return render_template("login.html")
+    if request.method == "GET":
+        return render_template("login.html")
+
+    email = request.form.get("email", "").strip().lower()
+    password = request.form.get("password", "")
+    error = "Incorrect email or password."
+
+    if not email or not password:
+        return render_template("login.html", error=error, email=email)
+
+    conn = get_db()
+    try:
+        user = conn.execute(
+            "SELECT id, password_hash FROM users WHERE email = ?", (email,)
+        ).fetchone()
+    finally:
+        conn.close()
+
+    if user is None or not check_password_hash(user["password_hash"], password):
+        return render_template("login.html", error=error, email=email)
+
+    session["user_id"] = user["id"]
+    return redirect(url_for("profile"))
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    flash("You've been signed out.", "success")
+    return redirect(url_for("landing"))
+
+
+@app.route("/profile")
+@login_required
+def profile():
+    user = current_user()
+
+    conn = get_db()
+    try:
+        totals = conn.execute(
+            "SELECT COUNT(*) AS n, COALESCE(SUM(amount), 0) AS total "
+            "FROM expenses WHERE user_id = ?",
+            (user["id"],),
+        ).fetchone()
+        category_rows = conn.execute(
+            "SELECT category, COUNT(*) AS n, COALESCE(SUM(amount), 0) AS total "
+            "FROM expenses WHERE user_id = ? GROUP BY category ORDER BY total DESC",
+            (user["id"],),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    max_total = category_rows[0]["total"] if category_rows else 0
+    categories = [
+        {
+            "category": row["category"],
+            "n": row["n"],
+            "total": row["total"],
+            "pct": round(row["total"] / max_total * 100) if max_total else 0,
+        }
+        for row in category_rows
+    ]
+
+    return render_template(
+        "profile.html",
+        user=user,
+        joined=_format_join_date(user["created_at"]),
+        expense_count=totals["n"],
+        total_spent=totals["total"],
+        categories=categories,
+    )
 
 
 @app.route("/terms")
@@ -99,16 +219,6 @@ def privacy():
 # ------------------------------------------------------------------ #
 # Placeholder routes — students will implement these                  #
 # ------------------------------------------------------------------ #
-
-@app.route("/logout")
-def logout():
-    return "Logout — coming in Step 3"
-
-
-@app.route("/profile")
-def profile():
-    return "Profile page — coming in Step 4"
-
 
 @app.route("/expenses/add")
 def add_expense():
