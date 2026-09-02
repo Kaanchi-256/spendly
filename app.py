@@ -65,6 +65,16 @@ def _format_join_date(value):
     return f"{parsed.day} {parsed.strftime('%B %Y')}"
 
 
+@app.template_filter("expense_date")
+def expense_date(value):
+    """Format a stored ISO 'YYYY-MM-DD' date as '2 Sep 2026'."""
+    try:
+        parsed = datetime.strptime(value, "%Y-%m-%d")
+    except (TypeError, ValueError):
+        return value
+    return f"{parsed.day} {parsed.strftime('%b %Y')}"
+
+
 # ------------------------------------------------------------------ #
 # Routes                                                              #
 # ------------------------------------------------------------------ #
@@ -182,10 +192,17 @@ def profile():
             "FROM expenses WHERE user_id = ? GROUP BY category ORDER BY total DESC",
             (user["id"],),
         ).fetchall()
+        recent_rows = conn.execute(
+            "SELECT date, description, category, amount "
+            "FROM expenses WHERE user_id = ? "
+            "ORDER BY date DESC, id DESC LIMIT 10",
+            (user["id"],),
+        ).fetchall()
     finally:
         conn.close()
 
     max_total = category_rows[0]["total"] if category_rows else 0
+    top_category = category_rows[0]["category"] if category_rows else None
     categories = [
         {
             "category": row["category"],
@@ -196,13 +213,25 @@ def profile():
         for row in category_rows
     ]
 
+    recent_expenses = [
+        {
+            "date": row["date"],
+            "description": row["description"],
+            "category": row["category"],
+            "amount": row["amount"],
+        }
+        for row in recent_rows
+    ]
+
     return render_template(
         "profile.html",
         user=user,
         joined=_format_join_date(user["created_at"]),
         expense_count=totals["n"],
         total_spent=totals["total"],
+        top_category=top_category,
         categories=categories,
+        recent_expenses=recent_expenses,
     )
 
 

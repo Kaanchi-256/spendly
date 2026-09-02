@@ -47,6 +47,10 @@
                 <span class="profile-stat-label">Total spent</span>
                 <span class="profile-stat-value">{{ total_spent|inr }}</span>
             </div>
+            <div class="profile-stat">
+                <span class="profile-stat-label">Top category</span>
+                <span class="profile-stat-value">{{ top_category or '—' }}</span>
+            </div>
         </div>
 
         {% if categories %}
@@ -64,6 +68,38 @@
         {% else %}
         <div class="profile-empty">
             <p>No expenses logged yet.</p>
+            <a href="{{ url_for('add_expense') }}">Add your first expense</a>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="profile-card">
+        <div class="profile-card-head">Recent activity</div>
+
+        {% if recent_expenses %}
+        <table class="profile-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Description</th>
+                    <th>Category</th>
+                    <th class="profile-table-amt">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for e in recent_expenses %}
+                <tr>
+                    <td>{{ e.date|expense_date }}</td>
+                    <td>{{ e.description or '—' }}</td>
+                    <td><span class="cat-badge">{{ e.category }}</span></td>
+                    <td class="profile-table-amt">{{ e.amount|inr }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="profile-empty">
+            <p>No activity yet.</p>
             <a href="{{ url_for('add_expense') }}">Add your first expense</a>
         </div>
         {% endif %}

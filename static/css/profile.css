@@ -98,7 +98,7 @@
 
 .profile-stats {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, 1fr);
     gap: 1rem;
     margin-bottom: 1.75rem;
 }
@@ -176,6 +176,53 @@
 }
 
 /* ------------------------------------------------------------------ */
+/* Recent activity table                                               */
+/* ------------------------------------------------------------------ */
+
+.profile-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.profile-table th {
+    text-align: left;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    padding: 0 0 0.75rem;
+    border-bottom: 1px solid var(--border-soft);
+}
+
+.profile-table td {
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--border-soft);
+    color: var(--ink-soft);
+}
+
+.profile-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.profile-table-amt {
+    text-align: right;
+    white-space: nowrap;
+    font-weight: 500;
+}
+
+.cat-badge {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 500;
+    background: var(--accent-light);
+    color: var(--accent);
+}
+
+/* ------------------------------------------------------------------ */
 /* Empty state                                                         */
 /* ------------------------------------------------------------------ */
 
@@ -211,4 +258,9 @@
     .profile-stats { grid-template-columns: 1fr; }
 
     .cat-row { grid-template-columns: 70px 1fr 70px; }
+
+    .profile-table { font-size: 0.8rem; }
+
+    .profile-table th:nth-child(2),
+    .profile-table td:nth-child(2) { display: none; }
 }
