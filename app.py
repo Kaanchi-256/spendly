@@ -1,6 +1,6 @@
 import os
 import sqlite3
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from functools import wraps
 
 from flask import Flask, flash, redirect, render_template, request, session, url_for
@@ -65,14 +65,83 @@ def _format_join_date(value):
     return f"{parsed.day} {parsed.strftime('%B %Y')}"
 
 
+def _parse_iso_date(value):
+    """Return a date from a 'YYYY-MM-DD' string, or None if it doesn't parse."""
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        return None
+
+
+def _pretty_date(value):
+    """Format a date as '2 Sep 2026'."""
+    return f"{value.day} {value.strftime('%b %Y')}"
+
+
 @app.template_filter("expense_date")
 def expense_date(value):
     """Format a stored ISO 'YYYY-MM-DD' date as '2 Sep 2026'."""
-    try:
-        parsed = datetime.strptime(value, "%Y-%m-%d")
-    except (TypeError, ValueError):
-        return value
-    return f"{parsed.day} {parsed.strftime('%b %Y')}"
+    parsed = _parse_iso_date(value)
+    return _pretty_date(parsed) if parsed else value
+
+
+def _resolve_date_range(args):
+    """Resolve profile filter args into (start, end, label) ISO date strings.
+
+    A named ``range`` (this-month / last-30-days / all) takes precedence over
+    explicit ``start`` / ``end`` values. Unparseable bounds are dropped. If
+    both bounds are present and reversed, they are swapped. Returns
+    ``(None, None, "All time")`` when nothing valid is supplied.
+    """
+    named = args.get("range", "")
+    today = date.today()
+
+    if named == "this-month":
+        start = today.replace(day=1)
+        return start.isoformat(), today.isoformat(), "This month"
+    if named == "last-30-days":
+        start = today - timedelta(days=29)
+        return start.isoformat(), today.isoformat(), "Last 30 days"
+    if named:  # "all", plus any unrecognised value — deliberately falls back
+        return None, None, "All time"
+
+    start = _parse_iso_date(args.get("start", ""))
+    end = _parse_iso_date(args.get("end", ""))
+    if start and end and start > end:
+        start, end = end, start
+
+    if start and end:
+        label = f"{_pretty_date(start)} – {_pretty_date(end)}"
+    elif start:
+        label = f"Since {_pretty_date(start)}"
+    elif end:
+        label = f"Up to {_pretty_date(end)}"
+    else:
+        label = "All time"
+
+    return (
+        start.isoformat() if start else None,
+        end.isoformat() if end else None,
+        label,
+    )
+
+
+def _expense_window_filter(user_id, start, end):
+    """Build a SQL WHERE fragment + params scoping expenses to a user and
+    an optional inclusive [start, end] date window.
+
+    Both bounds are passed as bind parameters; the fragment itself is made
+    only of literal strings, so it is safe to interpolate into a query.
+    """
+    clauses = ["user_id = ?"]
+    params = [user_id]
+    if start:
+        clauses.append("date >= ?")
+        params.append(start)
+    if end:
+        clauses.append("date <= ?")
+        params.append(end)
+    return " AND ".join(clauses), params
 
 
 # ------------------------------------------------------------------ #
@@ -179,24 +248,26 @@ def logout():
 @login_required
 def profile():
     user = current_user()
+    start, end, range_label = _resolve_date_range(request.args)
+    where, params = _expense_window_filter(user["id"], start, end)
 
     conn = get_db()
     try:
         totals = conn.execute(
-            "SELECT COUNT(*) AS n, COALESCE(SUM(amount), 0) AS total "
-            "FROM expenses WHERE user_id = ?",
-            (user["id"],),
+            f"SELECT COUNT(*) AS n, COALESCE(SUM(amount), 0) AS total "
+            f"FROM expenses WHERE {where}",
+            params,
         ).fetchone()
         category_rows = conn.execute(
-            "SELECT category, COUNT(*) AS n, COALESCE(SUM(amount), 0) AS total "
-            "FROM expenses WHERE user_id = ? GROUP BY category ORDER BY total DESC",
-            (user["id"],),
+            f"SELECT category, COUNT(*) AS n, COALESCE(SUM(amount), 0) AS total "
+            f"FROM expenses WHERE {where} GROUP BY category ORDER BY total DESC",
+            params,
         ).fetchall()
         recent_rows = conn.execute(
-            "SELECT date, description, category, amount "
-            "FROM expenses WHERE user_id = ? "
-            "ORDER BY date DESC, id DESC LIMIT 10",
-            (user["id"],),
+            f"SELECT date, description, category, amount "
+            f"FROM expenses WHERE {where} "
+            f"ORDER BY date DESC, id DESC LIMIT 10",
+            params,
         ).fetchall()
     finally:
         conn.close()
@@ -232,6 +303,9 @@ def profile():
         top_category=top_category,
         categories=categories,
         recent_expenses=recent_expenses,
+        start=start or "",
+        end=end or "",
+        range_label=range_label,
     )
 
 

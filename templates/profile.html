@@ -16,6 +16,30 @@
     </header>
 
     <div class="profile-card">
+        <div class="profile-card-head">Filter by date</div>
+
+        <form method="get" action="{{ url_for('profile') }}" class="profile-filter">
+            <label class="profile-filter-field">
+                <span>From</span>
+                <input type="date" name="start" value="{{ start }}">
+            </label>
+            <label class="profile-filter-field">
+                <span>To</span>
+                <input type="date" name="end" value="{{ end }}">
+            </label>
+            <button type="submit" class="profile-filter-apply">Apply</button>
+        </form>
+
+        <div class="profile-filter-presets">
+            <a href="{{ url_for('profile', range='this-month') }}">This month</a>
+            <a href="{{ url_for('profile', range='last-30-days') }}">Last 30 days</a>
+            <a href="{{ url_for('profile') }}">All time</a>
+        </div>
+
+        <p class="profile-filter-caption">Showing {{ range_label }}</p>
+    </div>
+
+    <div class="profile-card">
         <div class="profile-card-head">Account</div>
 
         <div class="profile-field">

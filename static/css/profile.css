@@ -49,6 +49,73 @@
 }
 
 /* ------------------------------------------------------------------ */
+/* Date filter                                                         */
+/* ------------------------------------------------------------------ */
+
+.profile-filter {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 1rem;
+}
+
+.profile-filter-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+}
+
+.profile-filter-field input {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.5rem 0.65rem;
+    font: inherit;
+    text-transform: none;
+    letter-spacing: normal;
+    color: var(--ink-soft);
+    background: var(--paper);
+}
+
+.profile-filter-apply {
+    border: 1px solid var(--accent);
+    border-radius: var(--radius-sm);
+    padding: 0.5rem 1.1rem;
+    font: inherit;
+    font-weight: 500;
+    color: var(--paper);
+    background: var(--accent);
+    cursor: pointer;
+}
+
+.profile-filter-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.profile-filter-presets a {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--accent);
+}
+
+.profile-filter-presets a:hover {
+    text-decoration: underline;
+}
+
+.profile-filter-caption {
+    margin-top: 1rem;
+    font-size: 0.8rem;
+    color: var(--ink-muted);
+}
+
+/* ------------------------------------------------------------------ */
 /* Account fields                                                      */
 /* ------------------------------------------------------------------ */
 
@@ -252,6 +319,10 @@
 
 @media (max-width: 600px) {
     .profile-page { padding: 2rem 1rem 3rem; }
+
+    .profile-filter { flex-direction: column; align-items: stretch; }
+
+    .profile-filter-field input { width: 100%; }
 
     .profile-card { padding: 1.25rem; }
 
