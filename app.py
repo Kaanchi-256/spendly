@@ -58,12 +58,12 @@ def inr(value):
 
 
 def _format_join_date(value):
-    """Turn a stored 'YYYY-MM-DD HH:MM:SS' string into '1 September 2026'."""
+    """Turn a stored 'YYYY-MM-DD HH:MM:SS' string into 'September 2026'."""
     try:
         parsed = datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
     except (TypeError, ValueError):
         return value
-    return f"{parsed.day} {parsed.strftime('%B %Y')}"
+    return parsed.strftime("%B %Y")
 
 
 def _parse_iso_date(value):
