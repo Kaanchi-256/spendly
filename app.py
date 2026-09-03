@@ -65,16 +65,6 @@ def _format_join_date(value):
     return f"{parsed.day} {parsed.strftime('%B %Y')}"
 
 
-@app.template_filter("expense_date")
-def expense_date(value):
-    """Format a stored ISO 'YYYY-MM-DD' date as '2 Sep 2026'."""
-    try:
-        parsed = datetime.strptime(value, "%Y-%m-%d")
-    except (TypeError, ValueError):
-        return value
-    return f"{parsed.day} {parsed.strftime('%b %Y')}"
-
-
 def _parse_iso_date(value):
     """Return a date from a 'YYYY-MM-DD' string, or None if it doesn't parse."""
     try:
@@ -84,8 +74,15 @@ def _parse_iso_date(value):
 
 
 def _pretty_date(value):
-    """Format a date as '2 Sep 2026', matching the expense_date filter style."""
+    """Format a date as '2 Sep 2026'."""
     return f"{value.day} {value.strftime('%b %Y')}"
+
+
+@app.template_filter("expense_date")
+def expense_date(value):
+    """Format a stored ISO 'YYYY-MM-DD' date as '2 Sep 2026'."""
+    parsed = _parse_iso_date(value)
+    return _pretty_date(parsed) if parsed else value
 
 
 def _resolve_date_range(args):
@@ -105,7 +102,7 @@ def _resolve_date_range(args):
     if named == "last-30-days":
         start = today - timedelta(days=29)
         return start.isoformat(), today.isoformat(), "Last 30 days"
-    if named:  # "all" or anything unrecognised
+    if named:  # "all", plus any unrecognised value — deliberately falls back
         return None, None, "All time"
 
     start = _parse_iso_date(args.get("start", ""))
@@ -127,6 +124,24 @@ def _resolve_date_range(args):
         end.isoformat() if end else None,
         label,
     )
+
+
+def _expense_window_filter(user_id, start, end):
+    """Build a SQL WHERE fragment + params scoping expenses to a user and
+    an optional inclusive [start, end] date window.
+
+    Both bounds are passed as bind parameters; the fragment itself is made
+    only of literal strings, so it is safe to interpolate into a query.
+    """
+    clauses = ["user_id = ?"]
+    params = [user_id]
+    if start:
+        clauses.append("date >= ?")
+        params.append(start)
+    if end:
+        clauses.append("date <= ?")
+        params.append(end)
+    return " AND ".join(clauses), params
 
 
 # ------------------------------------------------------------------ #
@@ -234,16 +249,7 @@ def logout():
 def profile():
     user = current_user()
     start, end, range_label = _resolve_date_range(request.args)
-
-    clauses = ["user_id = ?"]
-    params = [user["id"]]
-    if start:
-        clauses.append("date >= ?")
-        params.append(start)
-    if end:
-        clauses.append("date <= ?")
-        params.append(end)
-    where = " AND ".join(clauses)
+    where, params = _expense_window_filter(user["id"], start, end)
 
     conn = get_db()
     try:
