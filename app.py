@@ -1,3 +1,4 @@
+import calendar
 import os
 import sqlite3
 from datetime import date, datetime, timedelta
@@ -85,13 +86,28 @@ def expense_date(value):
     return _pretty_date(parsed) if parsed else value
 
 
+def _months_ago(value, months):
+    """Return the date ``months`` calendar months before ``value``.
+
+    The day is clamped to the last valid day of the target month.
+    """
+    month = value.month - months
+    year = value.year
+    while month <= 0:
+        month += 12
+        year -= 1
+    day = min(value.day, calendar.monthrange(year, month)[1])
+    return date(year, month, day)
+
+
 def _resolve_date_range(args):
     """Resolve profile filter args into (start, end, label) ISO date strings.
 
-    A named ``range`` (this-month / last-30-days / all) takes precedence over
-    explicit ``start`` / ``end`` values. Unparseable bounds are dropped. If
-    both bounds are present and reversed, they are swapped. Returns
-    ``(None, None, "All time")`` when nothing valid is supplied.
+    A named ``range`` (this-month / last-30-days / last-3-months /
+    last-6-months / all) takes precedence over explicit ``start`` / ``end``
+    values. Unparseable bounds are dropped. If both bounds are present and
+    reversed, they are swapped. Returns ``(None, None, "All time")`` when
+    nothing valid is supplied.
     """
     named = args.get("range", "")
     today = date.today()
@@ -102,6 +118,10 @@ def _resolve_date_range(args):
     if named == "last-30-days":
         start = today - timedelta(days=29)
         return start.isoformat(), today.isoformat(), "Last 30 days"
+    if named == "last-3-months":
+        return _months_ago(today, 3).isoformat(), today.isoformat(), "Last 3 months"
+    if named == "last-6-months":
+        return _months_ago(today, 6).isoformat(), today.isoformat(), "Last 6 months"
     if named:  # "all", plus any unrecognised value — deliberately falls back
         return None, None, "All time"
 
@@ -250,6 +270,9 @@ def profile():
     user = current_user()
     start, end, range_label = _resolve_date_range(request.args)
     where, params = _expense_window_filter(user["id"], start, end)
+    active_range = request.args.get("range", "") or (
+        "custom" if (start or end) else "all"
+    )
 
     conn = get_db()
     try:
@@ -306,6 +329,7 @@ def profile():
         start=start or "",
         end=end or "",
         range_label=range_label,
+        active_range=active_range,
     )
 
 

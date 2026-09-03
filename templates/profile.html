@@ -10,123 +10,109 @@
 
 <section class="profile-page">
 
-    <header class="profile-head">
-        <h1 class="profile-title">Your profile</h1>
-        <p class="profile-subtitle">Your account details and a snapshot of your spending.</p>
-    </header>
-
-    <div class="profile-card">
-        <div class="profile-card-head">Filter by date</div>
-
-        <form method="get" action="{{ url_for('profile') }}" class="profile-filter">
-            <label class="profile-filter-field">
-                <span>From</span>
-                <input type="date" name="start" value="{{ start }}">
-            </label>
-            <label class="profile-filter-field">
-                <span>To</span>
-                <input type="date" name="end" value="{{ end }}">
-            </label>
-            <button type="submit" class="profile-filter-apply">Apply</button>
-        </form>
-
-        <div class="profile-filter-presets">
-            <a href="{{ url_for('profile', range='this-month') }}">This month</a>
-            <a href="{{ url_for('profile', range='last-30-days') }}">Last 30 days</a>
-            <a href="{{ url_for('profile') }}">All time</a>
-        </div>
-
-        <p class="profile-filter-caption">Showing {{ range_label }}</p>
-    </div>
-
-    <div class="profile-card">
-        <div class="profile-card-head">Account</div>
-
-        <div class="profile-field">
-            <span class="profile-field-label">Name</span>
-            <span class="profile-field-value">
-                <span class="profile-avatar">{{ user['name'][0]|upper }}</span>
-                {{ user['name'] }}
-            </span>
-        </div>
-        <div class="profile-field">
-            <span class="profile-field-label">Email</span>
-            <span class="profile-field-value">{{ user['email'] }}</span>
-        </div>
-        <div class="profile-field">
-            <span class="profile-field-label">Member since</span>
-            <span class="profile-field-value">Joined {{ joined }}</span>
+    <div class="profile-card identity-card">
+        <span class="identity-avatar">{{ user['name'][0]|upper }}</span>
+        <div class="identity-detail">
+            <h1 class="identity-name">{{ user['name'] }}</h1>
+            <p class="identity-email">{{ user['email'] }}</p>
+            <p class="identity-since">Member since {{ joined }}</p>
         </div>
     </div>
 
-    <div class="profile-card">
-        <div class="profile-card-head">Spending summary</div>
+    <form method="get" action="{{ url_for('profile') }}" class="filter-bar">
+        <div class="filter-presets">
+            <a class="filter-pill{{ ' is-active' if active_range == 'all' }}"
+               href="{{ url_for('profile') }}">All Time</a>
+            <a class="filter-pill{{ ' is-active' if active_range == 'this-month' }}"
+               href="{{ url_for('profile', range='this-month') }}">This Month</a>
+            <a class="filter-pill{{ ' is-active' if active_range == 'last-3-months' }}"
+               href="{{ url_for('profile', range='last-3-months') }}">Last 3 Months</a>
+            <a class="filter-pill{{ ' is-active' if active_range == 'last-6-months' }}"
+               href="{{ url_for('profile', range='last-6-months') }}">Last 6 Months</a>
+        </div>
+        <div class="filter-range">
+            <input type="date" name="start" value="{{ start }}" aria-label="Start date">
+            <span class="filter-sep">to</span>
+            <input type="date" name="end" value="{{ end }}" aria-label="End date">
+            <button type="submit" class="filter-apply">Apply</button>
+        </div>
+    </form>
 
-        <div class="profile-stats">
-            <div class="profile-stat">
-                <span class="profile-stat-label">Expenses logged</span>
-                <span class="profile-stat-value">{{ expense_count }}</span>
+    <div class="stat-grid">
+        <div class="profile-card stat-card">
+            <span class="stat-label">Total spent</span>
+            <span class="stat-value">{{ total_spent|inr }}</span>
+        </div>
+        <div class="profile-card stat-card">
+            <span class="stat-label">Transactions</span>
+            <span class="stat-value">{{ expense_count }}</span>
+        </div>
+        <div class="profile-card stat-card">
+            <span class="stat-label">Top category</span>
+            <span class="stat-value">{{ top_category or '—' }}</span>
+        </div>
+    </div>
+
+    <div class="profile-lower">
+
+        <div class="profile-card">
+            <div class="profile-card-head">Recent transactions</div>
+
+            {% if recent_expenses %}
+            <table class="profile-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Description</th>
+                        <th>Category</th>
+                        <th class="profile-table-amt">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for e in recent_expenses %}
+                    <tr>
+                        <td>{{ e.date|expense_date }}</td>
+                        <td>{{ e.description or '—' }}</td>
+                        <td><span class="cat-badge">{{ e.category }}</span></td>
+                        <td class="profile-table-amt">{{ e.amount|inr }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="profile-empty">
+                <p>No activity yet.</p>
+                <a href="{{ url_for('add_expense') }}">Add your first expense</a>
             </div>
-            <div class="profile-stat">
-                <span class="profile-stat-label">Total spent</span>
-                <span class="profile-stat-value">{{ total_spent|inr }}</span>
-            </div>
-            <div class="profile-stat">
-                <span class="profile-stat-label">Top category</span>
-                <span class="profile-stat-value">{{ top_category or '—' }}</span>
-            </div>
+            {% endif %}
         </div>
 
-        {% if categories %}
-        <div class="profile-cats">
-            {% for c in categories %}
-            <div class="cat-row">
-                <span class="cat-name">{{ c.category }}</span>
-                <div class="cat-track">
-                    <div class="cat-fill cat-fill--{{ loop.index0 % 4 }}" style="width: {{ c.pct }}%"></div>
+        <div class="profile-card">
+            <div class="profile-card-head">By category</div>
+
+            {% if categories %}
+            <div class="bycat-list">
+                {% for c in categories %}
+                <div class="bycat-item">
+                    <div class="bycat-head">
+                        <span class="bycat-name">{{ c.category }}</span>
+                        <span class="bycat-amt">{{ c.total|inr }}</span>
+                    </div>
+                    <div class="bycat-track">
+                        <div class="bycat-fill bycat-fill--{{ loop.index0 % 4 }}"
+                             style="width: {{ c.pct }}%"></div>
+                    </div>
                 </div>
-                <span class="cat-amt">{{ c.total|inr }}</span>
-            </div>
-            {% endfor %}
-        </div>
-        {% else %}
-        <div class="profile-empty">
-            <p>No expenses logged yet.</p>
-            <a href="{{ url_for('add_expense') }}">Add your first expense</a>
-        </div>
-        {% endif %}
-    </div>
-
-    <div class="profile-card">
-        <div class="profile-card-head">Recent activity</div>
-
-        {% if recent_expenses %}
-        <table class="profile-table">
-            <thead>
-                <tr>
-                    <th>Date</th>
-                    <th>Description</th>
-                    <th>Category</th>
-                    <th class="profile-table-amt">Amount</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for e in recent_expenses %}
-                <tr>
-                    <td>{{ e.date|expense_date }}</td>
-                    <td>{{ e.description or '—' }}</td>
-                    <td><span class="cat-badge">{{ e.category }}</span></td>
-                    <td class="profile-table-amt">{{ e.amount|inr }}</td>
-                </tr>
                 {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <div class="profile-empty">
-            <p>No activity yet.</p>
-            <a href="{{ url_for('add_expense') }}">Add your first expense</a>
+            </div>
+            {% else %}
+            <div class="profile-empty">
+                <p>No expenses logged yet.</p>
+                <a href="{{ url_for('add_expense') }}">Add your first expense</a>
+            </div>
+            {% endif %}
         </div>
-        {% endif %}
+
     </div>
 
 </section>
