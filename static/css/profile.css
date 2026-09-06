@@ -31,6 +31,24 @@
     border-bottom: 1px solid var(--border-soft);
 }
 
+.profile-card-head--row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.add-expense-btn {
+    letter-spacing: 0;
+    text-transform: none;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--accent);
+}
+
+.add-expense-btn:hover {
+    text-decoration: underline;
+}
+
 /* ------------------------------------------------------------------ */
 /* Identity card                                                       */
 /* ------------------------------------------------------------------ */

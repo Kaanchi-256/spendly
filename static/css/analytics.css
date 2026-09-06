@@ -1,0 +1,205 @@
+/* ------------------------------------------------------------------ */
+/* Analytics — coming soon                                             */
+/* ------------------------------------------------------------------ */
+
+.soon-page {
+    position: relative;
+    overflow: hidden;
+    min-height: calc(100vh - 60px - 100px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4rem 2rem;
+    background:
+        radial-gradient(120% 80% at 100% 0%, var(--accent-light) 0%, transparent 55%),
+        radial-gradient(120% 80% at 0% 100%, var(--accent-2-light) 0%, transparent 55%),
+        var(--paper);
+}
+
+/* Blurred background orbs */
+.soon-orb {
+    position: absolute;
+    border-radius: 999px;
+    filter: blur(70px);
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.soon-orb--tr {
+    width: 380px;
+    height: 380px;
+    top: -140px;
+    right: -120px;
+    background: var(--accent-light);
+}
+
+.soon-orb--bl {
+    width: 320px;
+    height: 320px;
+    bottom: -120px;
+    left: -110px;
+    background: var(--accent-2-light);
+}
+
+/* ------------------------------------------------------------------ */
+/* Card                                                                */
+/* ------------------------------------------------------------------ */
+
+.soon-card {
+    position: relative;
+    z-index: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    max-width: 520px;
+    text-align: center;
+    background: var(--paper-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.06);
+    padding: 3.5rem 3rem;
+}
+
+/* Decorative corner accents clipped inside the card */
+.soon-corner {
+    position: absolute;
+    width: 150px;
+    height: 150px;
+    border-radius: 999px;
+    background: var(--paper-warm);
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+.soon-corner--tr {
+    top: -75px;
+    right: -75px;
+}
+
+.soon-corner--bl {
+    bottom: -75px;
+    left: -75px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Icon tile                                                           */
+/* ------------------------------------------------------------------ */
+
+.soon-icon {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 5.5rem;
+    height: 5.5rem;
+    border-radius: var(--radius-lg);
+    background: var(--accent);
+    color: var(--paper-card);
+    box-shadow: 0 14px 32px rgba(26, 71, 42, 0.28);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.soon-icon:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 20px 40px rgba(26, 71, 42, 0.34);
+}
+
+.soon-icon svg {
+    width: 2.4rem;
+    height: 2.4rem;
+}
+
+/* ------------------------------------------------------------------ */
+/* Text                                                                */
+/* ------------------------------------------------------------------ */
+
+.soon-badge {
+    position: relative;
+    z-index: 1;
+    display: inline-block;
+    margin-top: 1.5rem;
+    padding: 0.5rem 1.1rem;
+    border-radius: 999px;
+    background: var(--accent);
+    color: var(--paper-card);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+
+.soon-title {
+    position: relative;
+    z-index: 1;
+    margin-top: 1.25rem;
+    font-family: var(--font-display);
+    font-size: clamp(2rem, 4vw, 2.75rem);
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+    color: var(--accent);
+}
+
+.soon-text {
+    position: relative;
+    z-index: 1;
+    max-width: 30rem;
+    margin: 1rem auto 0;
+    font-size: 1rem;
+    line-height: 1.7;
+    color: var(--ink-muted);
+}
+
+/* ------------------------------------------------------------------ */
+/* Pulsing dots                                                        */
+/* ------------------------------------------------------------------ */
+
+.soon-dots {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 1.75rem;
+}
+
+.soon-dots span {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--accent);
+    opacity: 0.35;
+    animation: soon-pulse 1.4s ease-in-out infinite;
+}
+
+.soon-dots span:nth-child(2) { animation-delay: 0.2s; }
+.soon-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes soon-pulse {
+    0%, 100% { opacity: 0.25; transform: scale(0.85); }
+    50%      { opacity: 0.9;  transform: scale(1); }
+}
+
+.soon-note {
+    position: relative;
+    z-index: 1;
+    margin-top: 1rem;
+    font-size: 0.8rem;
+    color: var(--ink-faint);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .soon-dots span { animation: none; opacity: 0.5; }
+    .soon-icon { transition: none; }
+}
+
+/* ------------------------------------------------------------------ */
+/* Responsive                                                          */
+/* ------------------------------------------------------------------ */
+
+@media (max-width: 600px) {
+    .soon-page { padding: 3rem 1rem; }
+    .soon-card { padding: 2.5rem 1.5rem; }
+}
