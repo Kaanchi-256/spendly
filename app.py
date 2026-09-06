@@ -1,4 +1,5 @@
 import calendar
+import math
 import os
 import sqlite3
 from datetime import date, datetime, timedelta
@@ -39,6 +40,12 @@ def current_user():
 @app.context_processor
 def inject_current_user():
     return {"current_user": current_user()}
+
+
+EXPENSE_CATEGORIES = (
+    "Food", "Transport", "Bills", "Health",
+    "Entertainment", "Shopping", "Other",
+)
 
 
 def login_required(view):
@@ -339,6 +346,72 @@ def analytics():
     return render_template("analytics.html")
 
 
+@app.route("/expenses/add", methods=["GET", "POST"])
+@login_required
+def add_expense():
+    today = date.today().isoformat()
+
+    if request.method == "GET":
+        return render_template(
+            "add_expense.html", categories=EXPENSE_CATEGORIES, date=today
+        )
+
+    amount_raw = request.form.get("amount", "").strip()
+    category = request.form.get("category", "").strip()
+    date_raw = request.form.get("date", "").strip()
+    description = request.form.get("description", "").strip()
+
+    try:
+        amount = float(amount_raw)
+    except ValueError:
+        amount = None
+
+    expense_date = _parse_iso_date(date_raw)
+
+    if amount is None or not math.isfinite(amount) or amount <= 0:
+        error = "Enter an amount greater than zero."
+    elif category not in EXPENSE_CATEGORIES:
+        error = "Choose a category from the list."
+    elif expense_date is None:
+        error = "Enter a valid date."
+    elif len(description) > 200:
+        error = "Description is too long (max 200 characters)."
+    else:
+        error = None
+
+    if error:
+        # 200, not a redirect: re-render the form with the entered values.
+        return render_template(
+            "add_expense.html",
+            categories=EXPENSE_CATEGORIES,
+            error=error,
+            amount=amount_raw,
+            category=category,
+            date=date_raw or today,
+            description=description,
+        )
+
+    conn = get_db()
+    try:
+        conn.execute(
+            "INSERT INTO expenses (user_id, amount, category, date, description) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (
+                session["user_id"],
+                round(amount, 2),
+                category,
+                expense_date.isoformat(),
+                description or None,
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    flash("Expense added.", "success")
+    return redirect(url_for("profile"))
+
+
 @app.route("/terms")
 def terms():
     return render_template("terms.html")
@@ -352,11 +425,6 @@ def privacy():
 # ------------------------------------------------------------------ #
 # Placeholder routes — students will implement these                  #
 # ------------------------------------------------------------------ #
-
-@app.route("/expenses/add")
-def add_expense():
-    return "Add expense — coming in Step 7"
-
 
 @app.route("/expenses/<int:id>/edit")
 def edit_expense(id):

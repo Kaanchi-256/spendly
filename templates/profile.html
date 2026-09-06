@@ -56,7 +56,10 @@
     <div class="profile-lower">
 
         <div class="profile-card">
-            <div class="profile-card-head">Recent transactions</div>
+            <div class="profile-card-head profile-card-head--row">
+                <span>Recent transactions</span>
+                <a href="{{ url_for('add_expense') }}" class="add-expense-btn">+ Add expense</a>
+            </div>
 
             {% if recent_expenses %}
             <table class="profile-table">
