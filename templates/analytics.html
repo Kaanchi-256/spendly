@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}Analytics — Spendly{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/analytics.css') }}">
+{% endblock %}
+
+{% block content %}
+
+<section class="soon-page">
+    <span class="soon-orb soon-orb--tr"></span>
+    <span class="soon-orb soon-orb--bl"></span>
+
+    <div class="soon-card">
+        <span class="soon-corner soon-corner--tr"></span>
+        <span class="soon-corner soon-corner--bl"></span>
+
+        <div class="soon-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="9"></circle>
+                <path d="M12 7v5l3.5 2"></path>
+            </svg>
+        </div>
+
+        <span class="soon-badge">Coming Soon</span>
+
+        <h1 class="soon-title">Advanced Analytics</h1>
+
+        <p class="soon-text">
+            We're working on powerful insights and visualizations
+            to help you understand your spending patterns better.
+        </p>
+
+        <div class="soon-dots" aria-hidden="true">
+            <span></span><span></span><span></span>
+        </div>
+
+        <p class="soon-note">We're crafting something special</p>
+    </div>
+</section>
+
+{% endblock %}
