@@ -351,43 +351,42 @@ def analytics():
 def add_expense():
     today = date.today().isoformat()
 
-    if request.method == "GET":
+    def render_form(**kwargs):
         return render_template(
-            "add_expense.html", categories=EXPENSE_CATEGORIES, date=today
+            "add_expense.html", categories=EXPENSE_CATEGORIES, **kwargs
         )
+
+    if request.method == "GET":
+        return render_form(selected_date=today)
 
     amount_raw = request.form.get("amount", "").strip()
     category = request.form.get("category", "").strip()
     date_raw = request.form.get("date", "").strip()
-    description = request.form.get("description", "").strip()
+    description = request.form.get("description", "").strip()[:200]
 
     try:
         amount = float(amount_raw)
     except ValueError:
         amount = None
 
-    expense_date = _parse_iso_date(date_raw)
+    parsed_date = _parse_iso_date(date_raw)
 
     if amount is None or not math.isfinite(amount) or amount <= 0:
-        error = "Enter an amount greater than zero."
+        error = "Please enter an amount greater than zero."
     elif category not in EXPENSE_CATEGORIES:
-        error = "Choose a category from the list."
-    elif expense_date is None:
-        error = "Enter a valid date."
-    elif len(description) > 200:
-        error = "Description is too long (max 200 characters)."
+        error = "Please choose a category from the list."
+    elif parsed_date is None:
+        error = "Please enter a valid date."
     else:
         error = None
 
     if error:
         # 200, not a redirect: re-render the form with the entered values.
-        return render_template(
-            "add_expense.html",
-            categories=EXPENSE_CATEGORIES,
+        return render_form(
             error=error,
             amount=amount_raw,
             category=category,
-            date=date_raw or today,
+            selected_date=date_raw or today,
             description=description,
         )
 
@@ -400,7 +399,7 @@ def add_expense():
                 session["user_id"],
                 round(amount, 2),
                 category,
-                expense_date.isoformat(),
+                parsed_date.isoformat(),
                 description or None,
             ),
         )
