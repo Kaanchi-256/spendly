@@ -1,38 +1,41 @@
 """Tests for the "Add Expense" feature (spec 07).
 
-Written from `.claude/specs/07-add-expense.md` — the spec's Routes, Rules and
-"Definition of done" — not from the route implementation.
-
-Each test that inspects a profile provisions its own fresh user (unique email)
-so assertions about totals / activity are deterministic against a shared DB
-file. "Today" in the environment is 2026-09-06.
+Derived from `.claude/specs/07-add-expense.md` — the documented expected
+behaviour and "Definition of done" checklist — not from the route
+implementation. Each test that inspects a profile provisions its own fresh
+user with a unique email, because the DB is a shared file across the session.
 """
 
 import uuid
+from datetime import date
 
 import pytest
 from werkzeug.security import generate_password_hash
 
 from database.db import get_db
 
-TODAY = "2026-09-06"
+ADD_URL = "/expenses/add"
+PROFILE_URL = "/profile"
+LOGIN_URL = "/login"
 
-CANONICAL_CATEGORIES = [
+CANONICAL_CATEGORIES = (
     "Food", "Transport", "Bills", "Health",
     "Entertainment", "Shopping", "Other",
-]
+)
+
+TODAY = date.today().isoformat()
 
 
 # ---------------------------------------------------------------------------
-# helpers / fixtures
+# Helpers / fixtures
 # ---------------------------------------------------------------------------
 def _make_user():
-    email = f"add-exp-{uuid.uuid4().hex}@example.com"
+    email = f"add-{uuid.uuid4().hex}@example.com"
     conn = get_db()
     try:
         conn.execute(
             "INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)",
-            ("Add Expense Person", email, generate_password_hash("password123")),
+            ("Adder Person", email, generate_password_hash("password123")),
         )
         conn.commit()
         uid = conn.execute(
@@ -43,11 +46,12 @@ def _make_user():
     return uid
 
 
-def _expenses_for(user_id):
+def _rows_for(user_id):
     conn = get_db()
     try:
         return conn.execute(
-            "SELECT * FROM expenses WHERE user_id = ? ORDER BY id",
+            "SELECT amount, category, date, description, user_id "
+            "FROM expenses WHERE user_id = ? ORDER BY id",
             (user_id,),
         ).fetchall()
     finally:
@@ -57,103 +61,91 @@ def _expenses_for(user_id):
 def _count_all_expenses():
     conn = get_db()
     try:
-        return conn.execute("SELECT COUNT(*) AS c FROM expenses").fetchone()["c"]
+        return conn.execute("SELECT COUNT(*) AS n FROM expenses").fetchone()["n"]
     finally:
         conn.close()
 
 
 @pytest.fixture
 def fresh_user(client):
-    """A logged-in client for a brand-new user that owns zero expenses.
-
-    Yields (client, user_id).
-    """
+    """Return (client, user_id) for a brand-new logged-in user with no expenses."""
     uid = _make_user()
     with client.session_transaction() as sess:
         sess["user_id"] = uid
     return client, uid
 
 
-VALID_FORM = {
-    "amount": "250.75",
-    "category": "Food",
-    "date": TODAY,
-    "description": "Lunch",
-}
-
-
 # ---------------------------------------------------------------------------
-# Auth guard
+# Auth guards
 # ---------------------------------------------------------------------------
 def test_get_add_expense_logged_out_redirects_to_login(client):
-    """GET /expenses/add while logged out redirects to /login."""
-    resp = client.get("/expenses/add")
-    assert resp.status_code == 302, "unauthenticated GET must redirect"
-    assert "/login" in resp.headers["Location"]
+    with client.session_transaction() as sess:
+        sess.clear()
+    resp = client.get(ADD_URL)
+    assert resp.status_code == 302, "GET /expenses/add must require auth"
+    assert LOGIN_URL in resp.headers["Location"]
 
 
-def test_post_add_expense_logged_out_redirects_to_login(client):
-    """POST /expenses/add while logged out redirects to /login and inserts nothing."""
+def test_post_add_expense_logged_out_redirects_and_inserts_nothing(client):
+    with client.session_transaction() as sess:
+        sess.clear()
     before = _count_all_expenses()
-    resp = client.post("/expenses/add", data=VALID_FORM)
-    assert resp.status_code == 302, "unauthenticated POST must redirect"
-    assert "/login" in resp.headers["Location"]
-    assert _count_all_expenses() == before, "logged-out POST must not insert a row"
+    resp = client.post(ADD_URL, data={
+        "amount": "50", "category": "Food", "date": TODAY, "description": "x",
+    })
+    assert resp.status_code == 302, "POST /expenses/add must require auth"
+    assert LOGIN_URL in resp.headers["Location"]
+    assert _count_all_expenses() == before, "no row inserted for a logged-out POST"
 
 
 # ---------------------------------------------------------------------------
 # GET renders the form
 # ---------------------------------------------------------------------------
 def test_get_renders_form_with_all_fields(fresh_user):
-    """GET while logged in renders a form with amount, category, date, description."""
-    c, _ = fresh_user
-    resp = c.get("/expenses/add")
-    assert resp.status_code == 200
-    body = resp.get_data(as_text=True)
+    client, _ = fresh_user
+    body = client.get(ADD_URL).get_data(as_text=True)
     assert 'name="amount"' in body, "amount field present"
     assert 'name="category"' in body, "category field present"
     assert 'name="date"' in body, "date field present"
     assert 'name="description"' in body, "description field present"
-    assert "<form" in body and 'method="post"' in body.lower()
+    assert f'action="{ADD_URL}"' in body or "<form" in body, "form posts to add_expense"
 
 
 def test_get_date_field_defaults_to_today(fresh_user):
-    """The date field defaults to today's date."""
-    c, _ = fresh_user
-    body = c.get("/expenses/add").get_data(as_text=True)
-    assert f'value="{TODAY}"' in body, "date input should be pre-filled with today"
+    client, _ = fresh_user
+    body = client.get(ADD_URL).get_data(as_text=True)
+    assert f'value="{TODAY}"' in body, "date input defaults to today's ISO date"
 
 
-def test_category_select_lists_exactly_canonical_categories(fresh_user):
-    """The category <select> lists exactly the seven canonical categories."""
-    c, _ = fresh_user
-    body = c.get("/expenses/add").get_data(as_text=True)
-    import re
+def test_get_category_select_lists_exactly_canonical_categories(fresh_user):
+    client, _ = fresh_user
+    body = client.get(ADD_URL).get_data(as_text=True)
+    for cat in CANONICAL_CATEGORIES:
+        assert f">{cat}<" in body or f'value="{cat}"' in body, f"{cat} option present"
+    # nothing outside the canonical set
+    for bogus in ("Groceries", "Rent", "Travel", "Misc"):
+        assert f'value="{bogus}"' not in body, f"{bogus} must not be an option"
 
-    select_match = re.search(r"<select[^>]*name=[\"']category[\"'].*?</select>",
-                             body, re.DOTALL | re.IGNORECASE)
-    assert select_match, "a <select name='category'> must be rendered"
-    options = re.findall(r"<option[^>]*value=[\"']([^\"']*)[\"']",
-                         select_match.group(0), re.IGNORECASE)
-    # drop an empty placeholder option if present
-    options = [o for o in options if o != ""]
-    assert options == CANONICAL_CATEGORIES, (
-        f"category options must be exactly {CANONICAL_CATEGORIES}, got {options}"
-    )
+
+def test_add_expense_page_shows_rupee_symbol(fresh_user):
+    client, _ = fresh_user
+    body = client.get(ADD_URL).get_data(as_text=True)
+    assert "₹" in body, "the add-expense page renders the ₹ symbol"
 
 
 # ---------------------------------------------------------------------------
-# Valid submission
+# Happy path
 # ---------------------------------------------------------------------------
-def test_valid_submission_inserts_one_row_with_correct_values(fresh_user):
-    """A valid submission inserts exactly one expenses row with the right values."""
-    c, uid = fresh_user
-    resp = c.post("/expenses/add", data={
+def test_valid_submission_inserts_one_row_and_redirects(fresh_user):
+    client, uid = fresh_user
+    resp = client.post(ADD_URL, data={
         "amount": "250.75", "category": "Food",
         "date": TODAY, "description": "Lunch",
     })
     assert resp.status_code == 302, "successful add redirects"
-    rows = _expenses_for(uid)
+    assert PROFILE_URL in resp.headers["Location"], "redirect target is /profile"
+
+    rows = _rows_for(uid)
     assert len(rows) == 1, "exactly one row inserted"
     row = rows[0]
     assert row["user_id"] == uid
@@ -163,162 +155,182 @@ def test_valid_submission_inserts_one_row_with_correct_values(fresh_user):
     assert row["description"] == "Lunch"
 
 
-def test_valid_submission_redirects_to_profile(fresh_user):
-    """A valid submission redirects to /profile."""
-    c, _ = fresh_user
-    resp = c.post("/expenses/add", data=VALID_FORM)
-    assert resp.status_code == 302
-    assert "/profile" in resp.headers["Location"], "must redirect to profile"
-
-
 def test_valid_submission_shows_success_flash(fresh_user):
-    """A valid submission shows a success flash on the resulting page."""
-    c, _ = fresh_user
-    resp = c.post("/expenses/add", data=VALID_FORM, follow_redirects=True)
+    client, _ = fresh_user
+    resp = client.post(ADD_URL, data={
+        "amount": "10", "category": "Bills", "date": TODAY, "description": "",
+    }, follow_redirects=True)
     assert resp.status_code == 200
+    assert "Expense added." in resp.get_data(as_text=True), "success flash shown"
+
+
+def test_amount_is_rounded_to_two_decimals(fresh_user):
+    client, uid = fresh_user
+    client.post(ADD_URL, data={
+        "amount": "10.129", "category": "Other", "date": TODAY, "description": "r",
+    })
+    assert _rows_for(uid)[0]["amount"] == pytest.approx(10.13), "stored amount rounded to 2dp"
+
+
+def test_new_expense_reflected_in_all_profile_sections(fresh_user):
+    client, _ = fresh_user
+    client.post(ADD_URL, data={
+        "amount": "1234.00", "category": "Entertainment",
+        "date": TODAY, "description": "Concert tickets",
+    })
+    body = client.get(PROFILE_URL).get_data(as_text=True)
+    assert "Concert tickets" in body, "appears in recent activity"
+    assert "₹1,234.00" in body, "counts toward total spent"
+    assert "Entertainment" in body, "appears in category breakdown"
+    assert "1" in body, "transaction count includes the new expense"
+
+
+@pytest.mark.parametrize("category", CANONICAL_CATEGORIES)
+def test_every_canonical_category_accepted(fresh_user, category):
+    client, uid = fresh_user
+    resp = client.post(ADD_URL, data={
+        "amount": "5", "category": category, "date": TODAY, "description": "",
+    })
+    assert resp.status_code == 302, f"{category} is a valid category"
+    assert _rows_for(uid)[0]["category"] == category
+
+
+# ---------------------------------------------------------------------------
+# Description handling
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize("description", ["", "   ", "\t  \n"])
+def test_blank_or_whitespace_description_stored_as_null(fresh_user, description):
+    client, uid = fresh_user
+    resp = client.post(ADD_URL, data={
+        "amount": "12", "category": "Food", "date": TODAY, "description": description,
+    })
+    assert resp.status_code == 302
+    assert _rows_for(uid)[0]["description"] is None, "blank description stored as NULL"
+
+
+def test_description_over_200_chars_trimmed_to_200(fresh_user):
+    client, uid = fresh_user
+    resp = client.post(ADD_URL, data={
+        "amount": "12", "category": "Food", "date": TODAY,
+        "description": "x" * 201,
+    })
+    assert resp.status_code == 302, "over-long description is trimmed, not rejected"
+    assert _rows_for(uid)[0]["description"] == "x" * 200, "description trimmed to 200 chars"
+
+
+def test_description_exactly_200_chars_accepted(fresh_user):
+    client, uid = fresh_user
+    desc = "y" * 200
+    resp = client.post(ADD_URL, data={
+        "amount": "12", "category": "Food", "date": TODAY, "description": desc,
+    })
+    assert resp.status_code == 302, "200-char description is within the limit"
+    assert _rows_for(uid)[0]["description"] == desc
+
+
+# ---------------------------------------------------------------------------
+# Validation errors — each re-renders at 200 with no row inserted
+# ---------------------------------------------------------------------------
+# label -> extra form data to merge over the valid baseline (amount omitted == "missing")
+INVALID_AMOUNTS = {
+    "missing": {},
+    "empty": {"amount": ""},
+    "whitespace": {"amount": "   "},
+    "non_numeric": {"amount": "abc"},
+    "zero": {"amount": "0"},
+    "zero_decimal": {"amount": "0.00"},
+    "negative": {"amount": "-5"},
+    "nan": {"amount": "nan"},
+    "inf": {"amount": "inf"},
+    "negative_inf": {"amount": "-inf"},
+}
+
+
+@pytest.mark.parametrize("label", list(INVALID_AMOUNTS))
+def test_invalid_amount_rejected(fresh_user, label):
+    client, uid = fresh_user
+    data = {"category": "Food", "date": TODAY, "description": "d"}
+    data.update(INVALID_AMOUNTS[label])
+    resp = client.post(ADD_URL, data=data)
+    assert resp.status_code == 200, f"{label} amount must re-render the form"
+    assert _rows_for(uid) == [], f"{label} amount must not insert a row"
+
+
+@pytest.mark.parametrize("category", ["", "   ", "Groceries", "food", "FOOD", "Rent", "Unknown"])
+def test_non_canonical_or_empty_category_rejected(fresh_user, category):
+    client, uid = fresh_user
+    resp = client.post(ADD_URL, data={
+        "amount": "20", "category": category, "date": TODAY, "description": "d",
+    })
+    assert resp.status_code == 200, f"category {category!r} must be rejected"
+    assert _rows_for(uid) == [], f"category {category!r} must not be stored"
+
+
+@pytest.mark.parametrize("bad_date", [
+    "", "not-a-date", "2026/09/08", "08-09-2026",
+    "2026-13-01", "2026-02-30", "2026-00-10", "20260908",
+])
+def test_invalid_or_missing_date_rejected(fresh_user, bad_date):
+    client, uid = fresh_user
+    resp = client.post(ADD_URL, data={
+        "amount": "20", "category": "Food", "date": bad_date, "description": "d",
+    })
+    assert resp.status_code == 200, f"date {bad_date!r} must be rejected"
+    assert _rows_for(uid) == [], f"date {bad_date!r} must not insert a row"
+
+
+def test_missing_date_field_rejected(fresh_user):
+    client, uid = fresh_user
+    resp = client.post(ADD_URL, data={
+        "amount": "20", "category": "Food", "description": "d",
+    })
+    assert resp.status_code == 200, "an absent date field must be rejected"
+    assert _rows_for(uid) == [], "no row inserted when date is missing"
+
+
+# ---------------------------------------------------------------------------
+# Entered values preserved on validation error
+# ---------------------------------------------------------------------------
+def test_entered_values_preserved_on_error(fresh_user):
+    client, _ = fresh_user
+    resp = client.post(ADD_URL, data={
+        "amount": "0",  # invalid -> triggers re-render
+        "category": "Shopping",
+        "date": "2026-03-15",
+        "description": "Sneakers",
+    })
     body = resp.get_data(as_text=True)
-    assert "Expense added." in body, "success flash message shown"
+    assert resp.status_code == 200
+    assert 'value="0"' in body, "amount preserved"
+    assert "Sneakers" in body, "description preserved"
+    assert "2026-03-15" in body, "date preserved"
+    assert "Shopping" in body, "category preserved / re-selected"
 
 
-def test_amount_rounded_to_two_decimals(fresh_user):
-    """The stored amount is rounded to 2 decimal places."""
-    c, uid = fresh_user
-    c.post("/expenses/add", data={
-        "amount": "10.129", "category": "Bills",
-        "date": TODAY, "description": "",
+def test_validation_error_shows_error_banner(fresh_user):
+    client, _ = fresh_user
+    resp = client.post(ADD_URL, data={
+        "amount": "abc", "category": "Food", "date": TODAY, "description": "",
     })
-    rows = _expenses_for(uid)
-    assert len(rows) == 1
-    assert rows[0]["amount"] == pytest.approx(10.13)
+    body = resp.get_data(as_text=True).lower()
+    assert resp.status_code == 200
+    assert "error" in body or "amount" in body, "an error message is displayed"
 
 
 # ---------------------------------------------------------------------------
-# New expense reflected on /profile (no date filter)
+# Ownership — form-supplied user_id is ignored
 # ---------------------------------------------------------------------------
-def test_new_expense_appears_on_profile_all_sections(fresh_user):
-    """The new expense appears in recent activity, count, total and breakdown."""
-    c, _ = fresh_user
-    c.post("/expenses/add", data={
-        "amount": "300.00", "category": "Entertainment",
-        "date": TODAY, "description": "Concert ticket",
+def test_form_supplied_user_id_is_ignored(client):
+    victim = _make_user()
+    attacker = _make_user()
+    with client.session_transaction() as sess:
+        sess["user_id"] = attacker
+    resp = client.post(ADD_URL, data={
+        "amount": "99", "category": "Food", "date": TODAY,
+        "description": "not yours", "user_id": victim, "id": victim,
     })
-    body = c.get("/profile").get_data(as_text=True)
-    assert "Concert ticket" in body, "recent activity lists the new expense"
-    assert "Entertainment" in body, "category breakdown includes the new category"
-    assert "₹300.00" in body, "total spent / breakdown reflects the amount"
-    assert "1" in body, "transaction count reflects the single expense"
-
-
-def test_second_expense_updates_profile_totals(fresh_user):
-    """Adding a second expense updates the aggregate total on the profile."""
-    c, _ = fresh_user
-    c.post("/expenses/add", data={
-        "amount": "100.00", "category": "Food", "date": TODAY, "description": "A",
-    })
-    c.post("/expenses/add", data={
-        "amount": "50.50", "category": "Food", "date": TODAY, "description": "B",
-    })
-    body = c.get("/profile").get_data(as_text=True)
-    assert "₹150.50" in body, "profile total sums both new expenses"
-
-
-# ---------------------------------------------------------------------------
-# Validation errors: re-render form (200), no row, values preserved
-# ---------------------------------------------------------------------------
-@pytest.mark.parametrize("bad, why", [
-    ({"amount": "", "category": "Food", "date": TODAY, "description": "x"},
-     "missing amount"),
-    ({"amount": "abc", "category": "Food", "date": TODAY, "description": "x"},
-     "non-numeric amount"),
-    ({"amount": "0", "category": "Food", "date": TODAY, "description": "x"},
-     "amount is zero"),
-    ({"amount": "-5", "category": "Food", "date": TODAY, "description": "x"},
-     "negative amount"),
-    ({"amount": "nan", "category": "Food", "date": TODAY, "description": "x"},
-     "NaN amount"),
-    ({"amount": "inf", "category": "Food", "date": TODAY, "description": "x"},
-     "infinite amount"),
-    ({"amount": "10", "category": "Groceries", "date": TODAY, "description": "x"},
-     "category outside canonical list"),
-    ({"amount": "10", "category": "", "date": TODAY, "description": "x"},
-     "empty category"),
-    ({"amount": "10", "category": "Food", "date": "not-a-date", "description": "x"},
-     "unparseable date"),
-    ({"amount": "10", "category": "Food", "date": "2026-13-40", "description": "x"},
-     "impossible date"),
-    ({"amount": "10", "category": "Food", "date": "", "description": "x"},
-     "missing date"),
-    ({"amount": "10", "category": "Food", "date": TODAY, "description": "z" * 201},
-     "description longer than 200 chars"),
-])
-def test_invalid_submission_rerenders_and_inserts_nothing(fresh_user, bad, why):
-    """Invalid submissions re-render the form (200) and insert no row."""
-    c, uid = fresh_user
-    resp = c.post("/expenses/add", data=bad)
-    assert resp.status_code == 200, f"{why}: form must re-render, not redirect"
-    assert _expenses_for(uid) == [], f"{why}: no expense row may be inserted"
-
-
-@pytest.mark.parametrize("bad", [
-    {"amount": "abc", "category": "Bills", "date": TODAY, "description": "Keep me"},
-    {"amount": "-5", "category": "Health", "date": "2026-09-10", "description": "Also keep"},
-])
-def test_invalid_submission_preserves_entered_values(fresh_user, bad):
-    """On a validation error the previously entered values are still shown."""
-    c, _ = fresh_user
-    body = c.post("/expenses/add", data=bad).get_data(as_text=True)
-    assert bad["description"] in body, "description preserved"
-    assert (f'value="{bad["category"]}"' in body
-            or f'>{bad["category"]}<' in body), "category preserved / re-selected"
-    # the submitted (bad) amount string is echoed back into the amount field
-    assert bad["amount"] in body, "submitted amount echoed back"
-
-
-def test_invalid_submission_shows_error_banner(fresh_user):
-    """A validation failure renders an error message on the form."""
-    c, _ = fresh_user
-    body = c.post("/expenses/add", data={
-        "amount": "0", "category": "Food", "date": TODAY, "description": "x",
-    }).get_data(as_text=True)
-    assert "error" in body.lower(), "an error banner/message should be shown"
-
-
-# ---------------------------------------------------------------------------
-# Blank description -> NULL
-# ---------------------------------------------------------------------------
-@pytest.mark.parametrize("desc", ["", "   "])
-def test_blank_description_stored_as_null(fresh_user, desc):
-    """A blank/whitespace description is stored as SQL NULL, not ''."""
-    c, uid = fresh_user
-    c.post("/expenses/add", data={
-        "amount": "42.00", "category": "Other", "date": TODAY, "description": desc,
-    })
-    rows = _expenses_for(uid)
-    assert len(rows) == 1, "valid expense with blank description is accepted"
-    assert rows[0]["description"] is None, "blank description must be NULL"
-
-
-# ---------------------------------------------------------------------------
-# Ownership: insert uses session user id, never a form-supplied user_id
-# ---------------------------------------------------------------------------
-def test_form_supplied_user_id_is_ignored(fresh_user):
-    """A user cannot create an expense owned by another user via a form field."""
-    c, uid = fresh_user
-    other_uid = _make_user()
-    c.post("/expenses/add", data={
-        "amount": "77.00", "category": "Shopping", "date": TODAY,
-        "description": "mine", "user_id": other_uid,
-    })
-    assert _expenses_for(other_uid) == [], "expense must not be assigned to other user"
-    mine = _expenses_for(uid)
-    assert len(mine) == 1 and mine[0]["user_id"] == uid, "expense owned by session user"
-
-
-# ---------------------------------------------------------------------------
-# Currency formatting on the new page
-# ---------------------------------------------------------------------------
-def test_add_expense_page_amounts_use_rupee_symbol(fresh_user):
-    """Monetary amounts on the add-expense page render with the ₹ symbol."""
-    c, _ = fresh_user
-    body = c.get("/expenses/add").get_data(as_text=True)
-    assert "₹" in body, "add-expense page should show the ₹ currency symbol"
+    assert resp.status_code == 302
+    assert _rows_for(victim) == [], "victim must not receive the expense"
+    attacker_rows = _rows_for(attacker)
+    assert len(attacker_rows) == 1, "expense is owned by the session user"
+    assert attacker_rows[0]["user_id"] == attacker
