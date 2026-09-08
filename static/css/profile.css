@@ -257,6 +257,12 @@
     font-weight: 500;
 }
 
+.profile-card-actions {
+    display: flex;
+    gap: 1.25rem;
+    align-items: center;
+}
+
 .cat-badge {
     display: inline-block;
     padding: 0.2rem 0.6rem;
