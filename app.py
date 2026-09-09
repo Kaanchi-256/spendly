@@ -5,7 +5,16 @@ import sqlite3
 from datetime import date, datetime, timedelta
 from functools import wraps
 
-from flask import Flask, flash, redirect, render_template, request, session, url_for
+from flask import (
+    Flask,
+    abort,
+    flash,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from database.db import get_db, init_db, seed_db
@@ -346,23 +355,17 @@ def analytics():
     return render_template("analytics.html")
 
 
-@app.route("/expenses/add", methods=["GET", "POST"])
-@login_required
-def add_expense():
-    today = date.today().isoformat()
+def _parse_expense_form(form):
+    """Validate a submitted add/edit expense form.
 
-    def render_form(**kwargs):
-        return render_template(
-            "add_expense.html", categories=EXPENSE_CATEGORIES, **kwargs
-        )
-
-    if request.method == "GET":
-        return render_form(selected_date=today)
-
-    amount_raw = request.form.get("amount", "").strip()
-    category = request.form.get("category", "").strip()
-    date_raw = request.form.get("date", "").strip()
-    description = request.form.get("description", "").strip()[:200]
+    Returns ``(values, error)`` where ``values`` carries both the raw strings
+    (for re-rendering the form) and the parsed ``amount`` / ``parsed_date``,
+    and ``error`` is a message string or ``None`` when the form is valid.
+    """
+    amount_raw = form.get("amount", "").strip()
+    category = form.get("category", "").strip()
+    date_raw = form.get("date", "").strip()
+    description = form.get("description", "").strip()[:200]
 
     try:
         amount = float(amount_raw)
@@ -380,14 +383,40 @@ def add_expense():
     else:
         error = None
 
+    values = {
+        "amount_raw": amount_raw,
+        "category": category,
+        "date_raw": date_raw,
+        "description": description,
+        "amount": amount,
+        "parsed_date": parsed_date,
+    }
+    return values, error
+
+
+@app.route("/expenses/add", methods=["GET", "POST"])
+@login_required
+def add_expense():
+    today = date.today().isoformat()
+
+    def render_form(**kwargs):
+        return render_template(
+            "add_expense.html", categories=EXPENSE_CATEGORIES, **kwargs
+        )
+
+    if request.method == "GET":
+        return render_form(selected_date=today)
+
+    values, error = _parse_expense_form(request.form)
+
     if error:
         # 200, not a redirect: re-render the form with the entered values.
         return render_form(
             error=error,
-            amount=amount_raw,
-            category=category,
-            selected_date=date_raw or today,
-            description=description,
+            amount=values["amount_raw"],
+            category=values["category"],
+            selected_date=values["date_raw"] or today,
+            description=values["description"],
         )
 
     conn = get_db()
@@ -397,10 +426,10 @@ def add_expense():
             "VALUES (?, ?, ?, ?, ?)",
             (
                 session["user_id"],
-                round(amount, 2),
-                category,
-                parsed_date.isoformat(),
-                description or None,
+                round(values["amount"], 2),
+                values["category"],
+                values["parsed_date"].isoformat(),
+                values["description"] or None,
             ),
         )
         conn.commit()
@@ -421,13 +450,89 @@ def privacy():
     return render_template("privacy.html")
 
 
+@app.route("/expenses")
+@login_required
+def list_expenses():
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            "SELECT id, date, description, category, amount "
+            "FROM expenses WHERE user_id = ? "
+            "ORDER BY date DESC, id DESC",
+            (session["user_id"],),
+        ).fetchall()
+    finally:
+        conn.close()
+    return render_template("expenses.html", expenses=rows)
+
+
+@app.route("/expenses/<int:id>/edit", methods=["GET", "POST"])
+@login_required
+def edit_expense(id):
+    conn = get_db()
+    try:
+        expense = conn.execute(
+            "SELECT id, amount, category, date, description "
+            "FROM expenses WHERE id = ? AND user_id = ?",
+            (id, session["user_id"]),
+        ).fetchone()
+
+        if expense is None:
+            # 404 for both "no such expense" and "not yours" — don't disclose.
+            abort(404)
+
+        def render_form(**kwargs):
+            return render_template(
+                "edit_expense.html",
+                categories=EXPENSE_CATEGORIES,
+                expense_id=id,
+                **kwargs,
+            )
+
+        if request.method == "GET":
+            return render_form(
+                amount=expense["amount"],
+                category=expense["category"],
+                selected_date=expense["date"],
+                description=expense["description"] or "",
+            )
+
+        values, error = _parse_expense_form(request.form)
+
+        if error:
+            # 200, not a redirect: re-render with the submitted values.
+            return render_form(
+                error=error,
+                amount=values["amount_raw"],
+                category=values["category"],
+                selected_date=values["date_raw"] or expense["date"],
+                description=values["description"],
+            )
+
+        conn.execute(
+            "UPDATE expenses "
+            "SET amount = ?, category = ?, date = ?, description = ? "
+            "WHERE id = ? AND user_id = ?",
+            (
+                round(values["amount"], 2),
+                values["category"],
+                values["parsed_date"].isoformat(),
+                values["description"] or None,
+                id,
+                session["user_id"],
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    flash("Expense updated.", "success")
+    return redirect(url_for("profile"))
+
+
 # ------------------------------------------------------------------ #
 # Placeholder routes — students will implement these                  #
 # ------------------------------------------------------------------ #
-
-@app.route("/expenses/<int:id>/edit")
-def edit_expense(id):
-    return "Edit expense — coming in Step 8"
 
 
 @app.route("/expenses/<int:id>/delete")

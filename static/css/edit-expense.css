@@ -1,0 +1,17 @@
+/* ------------------------------------------------------------------ */
+/* Edit expense page                                                   */
+/* ------------------------------------------------------------------ */
+/* Shares the .auth-* layout and .form-* classes from style.css with   */
+/* the add-expense page. Only the native <select> needs its own        */
+/* treatment — .form-input leaves no room for an arrow indicator.      */
+
+.auth-container select.form-input {
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: linear-gradient(45deg, transparent 50%, var(--ink-muted) 50%),
+                      linear-gradient(135deg, var(--ink-muted) 50%, transparent 50%);
+    background-position: calc(100% - 20px) center, calc(100% - 15px) center;
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+    padding-right: 2.5rem;
+}

@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}Modify expenses — Spendly{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/expenses.css') }}">
+{% endblock %}
+
+{% block content %}
+
+<section class="expenses-page">
+
+    <div class="expenses-card">
+        <div class="expenses-head">
+            <div>
+                <h1 class="expenses-title">Modify an expense</h1>
+                <p class="expenses-subtitle">Choose a transaction to edit.</p>
+            </div>
+            <a href="{{ url_for('add_expense') }}" class="expenses-add-btn">+ Add expense</a>
+        </div>
+
+        {% if expenses %}
+        <table class="expenses-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Description</th>
+                    <th>Category</th>
+                    <th class="expenses-table-amt">Amount</th>
+                    <th class="expenses-table-action">Edit</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for e in expenses %}
+                <tr>
+                    <td>{{ e.date|expense_date }}</td>
+                    <td>{{ e.description or '—' }}</td>
+                    <td><span class="cat-badge">{{ e.category }}</span></td>
+                    <td class="expenses-table-amt">{{ e.amount|inr }}</td>
+                    <td class="expenses-table-action">
+                        <a href="{{ url_for('edit_expense', id=e.id) }}" class="expenses-edit-link">Edit</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="expenses-empty">
+            <p>No expenses logged yet.</p>
+            <a href="{{ url_for('add_expense') }}">Add your first expense</a>
+        </div>
+        {% endif %}
+
+        <p class="expenses-back">
+            <a href="{{ url_for('profile') }}">Back to profile</a>
+        </p>
+    </div>
+
+</section>
+
+{% endblock %}
