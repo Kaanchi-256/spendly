@@ -15,3 +15,29 @@
     background-repeat: no-repeat;
     padding-right: 2.5rem;
 }
+
+/* Delete-expense button — secondary to "Save changes", styled as a danger    */
+/* action. Its own <form>, a sibling of the edit form (never nested).         */
+
+.edit-delete-form {
+    margin-top: 0.75rem;
+}
+
+.btn-delete {
+    width: 100%;
+    padding: 0.7rem;
+    background: var(--danger-light);
+    color: var(--danger);
+    border: 1px solid var(--danger);
+    border-radius: var(--radius-sm);
+    font-family: var(--font-body);
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.btn-delete:hover {
+    background: var(--danger);
+    color: var(--paper);
+}
