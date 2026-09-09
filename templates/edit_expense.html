@@ -51,6 +51,10 @@
                 </div>
                 <button type="submit" class="btn-submit">Save changes</button>
             </form>
+
+            <form method="POST" action="{{ url_for('delete_expense', id=expense_id) }}" class="edit-delete-form">
+                <button type="submit" class="btn-delete">Delete expense</button>
+            </form>
         </div>
 
         <p class="auth-switch">
@@ -60,4 +64,8 @@
     </div>
 </section>
 
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/expenses.js') }}"></script>
 {% endblock %}

@@ -530,14 +530,25 @@ def edit_expense(id):
     return redirect(url_for("profile"))
 
 
-# ------------------------------------------------------------------ #
-# Placeholder routes — students will implement these                  #
-# ------------------------------------------------------------------ #
-
-
-@app.route("/expenses/<int:id>/delete")
+@app.route("/expenses/<int:id>/delete", methods=["POST"])
+@login_required
 def delete_expense(id):
-    return "Delete expense — coming in Step 9"
+    conn = get_db()
+    try:
+        cursor = conn.execute(
+            "DELETE FROM expenses WHERE id = ? AND user_id = ?",
+            (id, session["user_id"]),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    if cursor.rowcount == 0:
+        # 404 for "no such expense" and "not yours" alike — don't disclose.
+        abort(404)
+
+    flash("Expense deleted.", "success")
+    return redirect(url_for("profile"))
 
 
 if __name__ == "__main__":
