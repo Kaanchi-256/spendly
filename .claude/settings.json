@@ -9,6 +9,15 @@
             "command": "bash -c 'cmd=$(cat); echo \"$cmd\" | grep -q \"expense_tracker\\.db\" || exit 0; if echo \"$cmd\" | grep -Eq \"(^|[^a-zA-Z])(rm|unlink|shred|mv)([^a-zA-Z]|$)|truncate|>[[:space:]]*[^|&=]*expense_tracker\\.db\"; then echo \"BLOCKED: refusing to delete, move, or truncate expense_tracker.db (cp for backup/restore is still allowed)\" >&2; exit 2; fi'"
           }
         ]
+      },
+      {
+        "matcher": "Bash|Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/block-dangerous.py\""
+          }
+        ]
       }
     ]
   }

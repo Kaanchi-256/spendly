@@ -1,27 +1,61 @@
-# Step 1: Read the JSON that the harness sends via stdin
-data = json.load(sys.stdin)
+#!/usr/bin/env python3
+"""PreToolUse hook: block destructive operations that target protected files.
 
-# Step 2: Extract the bash command the model wants to run
-command = data.get("tool_input", {}).get("command", "")
+Registered in .claude/settings.json for the Bash, Write, Edit and MultiEdit
+tools. Exit 2 + stderr message tells the harness to block the call.
+"""
+import json
+import re
+import sys
 
-# Step 3: Define what we want to protect
-protected_files = ["expense-tracker.db", ".env", "migrations/"]
+# Files / directories that must never be deleted, moved, truncated or
+# overwritten by a tool call. Matched case-insensitively against a basename
+# or a path fragment.
+PROTECTED = [
+    "important_textfile.txt",
+    ".env",
+    "migrations/",
+]
 
-# Step 4: Define what counts as dangerous
-dangerous_commands = ["rm", "rm -", "unlink", ">", "truncate"]
+# Destructive shell verbs (whole-word match, so "npm" / "chmod" don't trip).
+DANGEROUS_RE = re.compile(
+    r"(?:^|[^\w./-])(?:rm|unlink|shred|mv|truncate|dd)(?:[^\w./-]|$)"
+    r"|>\s*[^|&>]",  # output redirection that would overwrite a file
+)
 
-# Step 5: Check if the command is dangerous AND targets a protected file
-for dangerous in dangerous_commands:
-    if dangerous in command:
-        for protected in protected_files:
-            if protected in command:
-                # Block it: exit 2 + error message on stderr
-                print(
-                    f"BLOCKED: cannot run '{command}' — "
-                    f"'{protected}' is a protected file",
-                    file=sys.stderr
-                )
-                sys.exit(2)
+try:
+    data = json.load(sys.stdin)
+except (json.JSONDecodeError, ValueError):
+    sys.exit(0)
 
-# Step 6: If we get here, the command is fine — exit 0
+tool = data.get("tool_name", "")
+tool_input = data.get("tool_input", {}) or {}
+
+
+def block(target, reason):
+    print(f"BLOCKED: {reason} — '{target}' is protected", file=sys.stderr)
+    sys.exit(2)
+
+
+def hits_protected(text):
+    low = text.lower()
+    for p in PROTECTED:
+        if p.lower() in low:
+            return p
+    return None
+
+
+if tool == "Bash":
+    command = tool_input.get("command", "")
+    if DANGEROUS_RE.search(command):
+        p = hits_protected(command)
+        if p:
+            block(p, f"destructive command '{command.strip()}'")
+elif tool in ("Write", "Edit", "MultiEdit"):
+    # Write overwrites; Edit/MultiEdit mutate in place — both count.
+    path = tool_input.get("file_path", "")
+    p = hits_protected(path)
+    if p:
+        block(p, f"{tool} would modify {path}")
+
 sys.exit(0)
