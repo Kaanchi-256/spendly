@@ -1,0 +1,8 @@
+-> git add .
+-> git commit -m 'add profile page UI'
+-> git branch   (To verify the current branch name)
+-> git push origin feature/profile-page-design02
+-> Perform the pull request from the git page
+-> git checkout master
+-> git pull origin master
+-> git branch -D feature/profile-page-backend-routes
